@@ -30,9 +30,3 @@ Then give executing permissions to the `frida-server` by typing
 Run the frida-server by `./frida-server`
 
 Now we are ready to inject Frida scripts into application process.
-### Installing on PC
-Run the following command in your terminal:
-```
-pip install frida-tools
-```
-And you are all set.
