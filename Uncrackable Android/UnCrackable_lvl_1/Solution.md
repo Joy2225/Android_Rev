@@ -2,7 +2,7 @@ First decompile the apk file using jadx-gui. Inside decompile all the classes un
 
 We check the `MainActivity` of this apk `sg.vantagepoint.uncrackable1`.
 We also open the apk on our emulator or any phone you are using. I am using an emulator here. On trying to open we see `root detected`.
-![](images/U1_root_detected.png)
+![](images/U_root_detected.png)
 
 Now in the code, we see in the `OnCreate` function the **root check** happens. 
 ```java
