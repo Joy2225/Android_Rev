@@ -145,3 +145,164 @@ Lets try to load this code into our app.
 ![](Images/success_1.png)
 
 Thus, we bypass the root and tamper checks.
+
+Next we check the `onCreate` function of `MainActivity`.
+```java
+public void onCreate(Bundle bundle) {
+        verifyLibs();
+        init(xorkey.getBytes());
+        .....
+```
+
+We see that the `xorkey` is getting passed to the native function `init`.
+
+Decompile the native library `libfoo.so` and lets check the function
+
+![](Images/img_1.png)
+
+Basically it copies the `xorkey` present in the app, to a variable. I renamed the variable for ease.
+
+Next lets check the `Verify` function.
+```java
+public void verify(View view) {
+        String obj = ((EditText) findViewById(owasp.mstg.uncrackable3.R.id.edit_text)).getText().toString();
+        AlertDialog create = new AlertDialog.Builder(this).create();
+        if (this.check.check_code(obj)) {
+            create.setTitle("Success!");
+            create.setMessage("This is the correct secret.");
+        } else {
+            create.setTitle("Nope...");
+            create.setMessage("That's not it. Try again.");
+        }
+        create.setButton(-3, "OK", new DialogInterface.OnClickListener() { // from class: sg.vantagepoint.uncrackable3.MainActivity.3
+            @Override // android.content.DialogInterface.OnClickListener
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+        create.show();
+    }
+```
+
+It basically takes our input from the app, and then verifies it by passsing it to the `check_code` function.
+
+```java
+package sg.vantagepoint.uncrackable3;
+
+/* loaded from: classes.dex */
+public class CodeCheck {
+    private static final String TAG = "CodeCheck";
+
+    private native boolean bar(byte[] bArr);
+
+    public boolean check_code(String str) {
+        return bar(str.getBytes());
+    }
+}
+```
+
+So `check_code` inturn sends the data to the native function `bar`.
+
+Lets check the code of `bar`.
+![](Images/bar.png)
+
+It basically checks if our input is same as the xored value of `xor_key` and `local_48`. Now `local_48` is generated from the `secret` function. We needn't worry about reversing that function as we will be dynamically getting the secret value using Frida.
+
+Lets write the Interceptor function for getting the secret value.
+
+```js
+function SecretGenerator() {
+      Interceptor.attach(Module.findBaseAddress('libfoo.so').add(0xfa0), {
+        onEnter: function(args) { // standard Frida interception code
+          this.secretloc = args[0];
+        },
+        onLeave: function(retval) {
+          var encodedsecret = new Uint8Array(this.secretloc.readByteArray(24)); //length of secret string is 24. Getting the secret bytes.
+          console.log(encodedsecret);
+        }
+      });
+    }
+```
+
+Lets test this.
+First we load our js code without the above snippet and when the first layer is passed, we add this code and then write something random and then see the result.
+
+![](Images/secret_check.png)
+
+We add the offset `0xfa0` as the location of the secret function is that offset from the base address of the binary. I am working on a x86 emulator. If you are using some other emulator be sure to decompile the proper binary for the correct offset.
+
+![](Images/offset.png)
+
+Now lets write the rest of the code and implement it entirely in our script.
+
+```js
+Java.perform(function(){
+    Interceptor.attach(Module.findExportByName("libc.so","strstr"), {
+      onEnter: function(args){
+        this.detectfrida = 0;
+        if(args[0].readUtf8String().indexOf("frida") != -1){
+          this.detectfrida = 1;
+        }
+        else{
+          this.detectfrida = 0;
+        }
+      },
+      onLeave: function(retval){
+        if(this.detectfrida == 1){
+          retval.replace(0);
+        }
+      }
+    });
+
+    let c = Java.use("sg.vantagepoint.util.RootDetection");
+    c["checkRoot1"].implementation = function () {
+        return false
+    };
+
+    c["checkRoot2"].implementation = function () {
+        return false;
+    };
+
+    c["checkRoot3"].implementation = function () {
+        return false;
+    };
+
+    var xorkey  = "pizzapizzapizzapizzapizz"
+
+    var MainActivity = Java.use("sg.vantagepoint.uncrackable3.MainActivity");
+    MainActivity.$init.implementation = function() {   //Default constructor implementation
+        this.$init();
+        SecretGenerator();
+    };
+
+    function xorByteArrays(a1, a2) { // To get the actual secret string
+      var i;
+      const ret = new Uint8Array(new ArrayBuffer(24));
+      for (i = 0; i < 24; i++) {
+        ret[i] = a1[i] ^ a2.charCodeAt(i);
+      }
+      return ret;
+    }
+
+
+    function SecretGenerator() {
+      Interceptor.attach(Module.findBaseAddress('libfoo.so').add(0xfa0), {
+        onEnter: function(args) {
+          this.answerLocation = args[0];
+        },
+        onLeave: function(retval) {
+          var encodedAnswer = new Uint8Array(this.answerLocation.readByteArray(24));
+          console.log(encodedAnswer);
+          var decodedAnswer = xorByteArrays(encodedAnswer, xorkey);
+          console.log("Secret : " + String.fromCharCode.apply(null, decodedAnswer));
+        }
+      });
+    }
+})
+```
+
+And we have our answer
+
+![](Images/ans.png)
+
+Secret Key:- `making owasp great again`

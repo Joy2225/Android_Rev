@@ -70,7 +70,7 @@ Java.perform(function(){
     onEnter: function(args) {
       if (args[1].readCString().indexOf("pizza")!=-1) {
         xorkey = new Uint8Array(args[1].readByteArray(secretLength));
-        //console.log(xorkey);
+        console.log(xorkey);
       }
     },
   });
@@ -86,7 +86,7 @@ Java.perform(function(){
 
 
   function SecretGenerator() {
-    Interceptor.attach(Module.findBaseAddress('libfoo.so').add(0xfa0), {
+    Interceptor.attach(Module.findBaseAddress('libfoo.so').add(0x12c0), {
       onEnter: function(args) {
         this.answerLocation = args[0];
       },
