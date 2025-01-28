@@ -24,7 +24,9 @@ import dalvik.system.InMemoryDexClassLoader;
 import dalvik.system.PathClassLoader;
 
 public class MainActivity extends AppCompatActivity {
-
+    private interface onClassLoadedListener{
+        void onClassLoaded(String result);
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -84,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
                 if (result != null) {
                     // Update the TextView with the result
                     listener.onClassLoaded(result);
+                    
                 } else {
                     // Handle error if class loading fails
                     TextView textView = findViewById(R.id.editText);
