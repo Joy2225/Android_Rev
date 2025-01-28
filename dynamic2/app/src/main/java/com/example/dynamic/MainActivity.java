@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 
+import dalvik.system.DexClassLoader;
 import dalvik.system.InMemoryDexClassLoader;
 import dalvik.system.PathClassLoader;
 
@@ -50,11 +51,11 @@ public class MainActivity extends AppCompatActivity {
 
             @Override // android.text.TextWatcher
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-//                String result = MainActivity.this.loadDynamicClassFromAssets(MainActivity.this, dwnLink, "com.example.dynamic.greet");
-//                textView.setText(result);
-                loadDynamicClassFromAssets(MainActivity.this, dwnLink, "com.example.dynamic.greet", result -> {
-                    textView.setText(result);
-                });
+                String result = MainActivity.this.dexloadDynamicClassFromAssets(MainActivity.this, "classes.dex", "com.example.dynamic.greet");
+                textView.setText(result);
+//                loadDynamicClassFromAssets(MainActivity.this, dwnLink, "com.example.dynamic.greet", result -> {
+//                    textView.setText(result);
+//                });
 
             }
 
@@ -65,45 +66,84 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    
+    private String dexloadDynamicClassFromAssets(Context context, String dexFileName, String className) {
+        try {
+            // Step 1: Copy the .dex file from assets to internal storage
+            File dexFile = new File(context.getFilesDir(), dexFileName);
+            if (!dexFile.exists()) {
+                try (InputStream inputStream = context.getAssets().open(dexFileName);
+                     FileOutputStream outputStream = new FileOutputStream(dexFile)) {
+                    byte[] buffer = new byte[1024];
+                    int length;
+                    while ((length = inputStream.read(buffer)) > 0) {
+                        outputStream.write(buffer, 0, length);
+                    }
+                }
+            }
 
-//    private String loadDynamicClassFromAssets(Context context, String dexFileName, String className) {
-//        try {
-//            // Step 1: Copy the .dex file from assets to internal storage
-//            File dexFile = new File(context.getFilesDir(), dexFileName);
-//            if (!dexFile.exists()) {
-//                try (InputStream inputStream = context.getAssets().open(dexFileName);
-//                     FileOutputStream outputStream = new FileOutputStream(dexFile)) {
-//                    byte[] buffer = new byte[1024];
-//                    int length;
-//                    while ((length = inputStream.read(buffer)) > 0) {
-//                        outputStream.write(buffer, 0, length);
-//                    }
-//                }
-//            }
-//            Log.d("Path", getApplicationInfo().nativeLibraryDir);
-//
-//            Log.d("Path", String.valueOf(context.getFilesDir()));
-//            // Step 2: Load the .dex file using PathClassLoader
-//            File optimizedDir = context.getDir("dex", Context.MODE_PRIVATE);
-//            PathClassLoader pathClassLoader = new PathClassLoader(
-//                    dexFile.getAbsolutePath(),
-//                    null,
-//                    getClassLoader()
-//            );
-//
-//            // Step 3: Load the target class and invoke its method
-//            Class<?> dynamicClass = pathClassLoader.loadClass(className);
-//            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
-//            EditText textInputEditText = (EditText)findViewById(R.id.getInput);
-//            String val = textInputEditText.getText().toString();
-//            return (String) dynamicClass
-//                    .getMethod("Greet", String.class) // Replace with your method's signature
-//                    .invoke(instance, val); // Replace with arguments
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//            return "Error: " + e.getMessage();
-//        }
-//    }
+            // Step 2: Create DexClassLoader instance
+            File optimizedDir = context.getDir("dex", Context.MODE_PRIVATE);
+            DexClassLoader dexClassLoader = new DexClassLoader(
+                    dexFile.getAbsolutePath(),
+                    optimizedDir.getAbsolutePath(),
+                    null,
+                    getClassLoader()
+            );
+
+            // Step 3: Load the class and invoke its method
+            Class<?> dynamicClass = dexClassLoader.loadClass(className);
+            Object instance = dynamicClass.newInstance();
+            EditText textInputEditText = (EditText)findViewById(R.id.getInput);
+            String val = textInputEditText.getText().toString();
+            return (String) dynamicClass
+                    .getMethod("Greet", String.class)
+                    .invoke(instance, val);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error: " + e.getMessage();
+        }
+    }
+    
+
+    private String loadDynamicClassFromAssets(Context context, String dexFileName, String className) {
+        try {
+            // Step 1: Copy the .dex file from assets to internal storage
+            File dexFile = new File(context.getFilesDir(), dexFileName);
+            if (!dexFile.exists()) {
+                try (InputStream inputStream = context.getAssets().open(dexFileName);
+                     FileOutputStream outputStream = new FileOutputStream(dexFile)) {
+                    byte[] buffer = new byte[1024];
+                    int length;
+                    while ((length = inputStream.read(buffer)) > 0) {
+                        outputStream.write(buffer, 0, length);
+                    }
+                }
+            }
+            Log.d("Path", getApplicationInfo().nativeLibraryDir);
+
+            Log.d("Path", String.valueOf(context.getFilesDir()));
+            // Step 2: Load the .dex file using PathClassLoader
+            File optimizedDir = context.getDir("dex", Context.MODE_PRIVATE);
+            PathClassLoader pathClassLoader = new PathClassLoader(
+                    dexFile.getAbsolutePath(),
+                    null,
+                    getClassLoader()
+            );
+
+            // Step 3: Load the target class and invoke its method
+            Class<?> dynamicClass = pathClassLoader.loadClass(className);
+            Object instance = dynamicClass.getDeclaredConstructor().newInstance();
+            EditText textInputEditText = (EditText)findViewById(R.id.getInput);
+            String val = textInputEditText.getText().toString();
+            return (String) dynamicClass
+                    .getMethod("Greet", String.class) // Replace with your method's signature
+                    .invoke(instance, val); // Replace with arguments
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error: " + e.getMessage();
+        }
+    }
     private interface onClassLoadedListener{
         void onClassLoaded(String result);
     }
