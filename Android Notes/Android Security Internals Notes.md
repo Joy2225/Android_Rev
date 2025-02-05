@@ -48,3 +48,113 @@ When you call `performAction()` from your app, the Binder framework ensures that
 - Used for message passing, synchronization, shared memory, and remote procedure calls (RPC).
 - Enables **information sharing**, computational speedup, **modularity**, convenience, **privilege separation**, **data isolation**, stability.
 	- Each process has its own (sandboxed) address space, typically running under a unique system ID
+## 1. **Binder Objects and Transactions**
+
+- Each object accessed through the Binder framework implements the `IBinder` interface, called a **Binder Object**.
+    
+- Calls are performed inside a **Binder Transaction**, containing:
+    
+    - Reference to the target object
+        
+    - ID of the method to execute
+        
+    - Data buffer
+        
+- **Binder Driver** adds:
+    
+    - **Process ID (PID)**
+        
+    - **Effective User ID (EUID)** of the calling process
+        
+
+## 2. **Security Enforcement**
+
+- **Callee (server process)** can inspect the PID and EUID to decide whether to execute the request.
+    
+- **Kernel-filled PID and EUID** prevent processes from faking their identity, avoiding privilege escalation.
+    
+- **Key API Methods:**
+    
+    - `getCallingPid()`
+        
+    - `getCallingUid()`
+        
+
+## 3. **Important Notes**
+
+- **Multiple Apps under Same UID:**
+    
+    - The EUID may map to multiple apps, but security isn’t compromised as they share permissions.
+        
+    - SELinux rules can enforce process-specific restrictions.
+        
+
+## 4. **Binder Identity**
+
+- Binder objects maintain a **unique identity** across processes.
+    
+- **Process References:**
+    
+    - **Process A:** Direct reference (memory address)
+        
+    - **Process B & C:** Handle references (kernel-managed)
+        
+- **Security Implications:**
+    
+    - Userspace processes can't duplicate or forge Binder objects.
+        
+    - Binder objects act as **unique, unforgeable security tokens**.
+        
+
+## 5. **Capability-Based Security Model**
+
+- Access is granted via **unforgeable capabilities** that:
+    
+    - Reference the target object
+        
+    - Encapsulate access rights
+        
+- **No need for ACLs(Access Control Lists)** as possession of a capability implies access rights.
+    
+
+## 6. **Binder Tokens**
+
+- **Binder Tokens** are Binder objects used as security capabilities.
+    
+- **Access Control:**
+    
+    - Full access granted if the process holds a Binder token.
+        
+    - For granular control, implement permission checks using PID and EUID.
+        
+
+## 7. **Common Access Control Patterns**
+
+- **System UID (1000)** and **Root UID (0)** often have unrestricted access.
+    
+- Additional permission checks for other processes.
+    
+- **Dual-Layer Security:**
+    
+    - **Reference Limitation:** Restricting access to the Binder object.
+        
+    - **Caller Verification:** Permission checks during method execution.
+        
+
+## 8. **Binder Tokens as Capabilities**
+
+- Can be used solely for authentication without extra functionality.
+    
+- **Usage Patterns:**
+    
+    - Similar to session cookies for client-server authentication.
+        
+    - **Internal Framework Use:** Often invisible to regular apps.
+        
+    - **Window Tokens:**
+        
+        - Manage application windows in Android.
+            
+        - Apps can access their own window tokens, but not others'.
+            
+        - Ensures secure window management, preventing unauthorized overlays.
