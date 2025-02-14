@@ -29,7 +29,9 @@ import dalvik.system.PathClassLoader;
 
 public class MainActivity extends AppCompatActivity {
     private byte[] dexData = null;
-
+    static {
+       System.loadLibrary("dynamic");
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
