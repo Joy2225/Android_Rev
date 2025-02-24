@@ -32,6 +32,8 @@ public class MainActivity extends AppCompatActivity {
     static {
        System.loadLibrary("dynamic");
     }
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -42,6 +44,8 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+
 
         final TextView textView = (TextView) findViewById(R.id.editText);
         final String dwnLink = "https://bashupload.com/lv_Zu/classes.dex?download=1";
