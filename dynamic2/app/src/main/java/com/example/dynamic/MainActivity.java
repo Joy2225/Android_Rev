@@ -1,6 +1,7 @@
 package com.example.dynamic;
 
 import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -29,10 +30,37 @@ import dalvik.system.PathClassLoader;
 
 public class MainActivity extends AppCompatActivity {
     private byte[] dexData = null;
-    static {
-       System.loadLibrary("dynamic");
+//    static {
+//       System.loadLibrary("dynamic");
+//    }
+    public static boolean a() {
+//        Log.i("path",System.getenv("PATH"));
+        for (String str : System.getenv("PATH").split(":")) {
+            if (new File(str, "su").exists()) {
+                return true;
+            }
+        }
+        return false;
     }
 
+    public static boolean b() {
+        String str = Build.TAGS;
+        return str != null && str.contains("test-keys");
+    }
+
+    public static boolean c() {
+        for (String str : new String[]{"/system/app/Superuser.apk", "/system/xbin/daemonsu", "/system/etc/init.d/99SuperSUDaemon", "/system/bin/.ext/.su", "/system/etc/.has_su_daemon", "/system/etc/.installed_su_daemon", "/dev/com.koushikdutta.superuser.daemon/"}) {
+            if (new File(str).exists()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void aa(){
+        finish();
+        System.exit(0);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +72,10 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
+//        if(a()||b()||c()){
+//            Log.i("Foundit", "Here");
+//            aa();
+//        }
 
 
         final TextView textView = (TextView) findViewById(R.id.editText);
@@ -72,45 +103,56 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    
+
     private String dexloadDynamicClassFromAssets(Context context, String dexFileName, String className) {
         try {
-            // Step 1: Copy the .dex file from assets to internal storage
-            File dexFile = new File(context.getFilesDir(), dexFileName);
+            // Step 1: Copy the .dex file from assets to codeCacheDir
+            File dexFile = new File(context.getCodeCacheDir(), dexFileName);
             if (!dexFile.exists()) {
                 try (InputStream inputStream = context.getAssets().open(dexFileName);
                      FileOutputStream outputStream = new FileOutputStream(dexFile)) {
-                    byte[] buffer = new byte[1024];
+                    byte[] buffer = new byte[4096];
                     int length;
                     while ((length = inputStream.read(buffer)) > 0) {
                         outputStream.write(buffer, 0, length);
                     }
+                    outputStream.flush();
                 }
             }
 
-            // Step 2: Create DexClassLoader instance
-            File optimizedDir = context.getDir("dex", Context.MODE_PRIVATE);
+            // Step 2: Set up DexClassLoader
+            File optimizedDir = context.getCodeCacheDir(); // ✅ Safe location for DEX
             DexClassLoader dexClassLoader = new DexClassLoader(
                     dexFile.getAbsolutePath(),
                     optimizedDir.getAbsolutePath(),
                     null,
-                    getClassLoader()
+                    context.getApplicationContext().getClassLoader() // ✅ Correct ClassLoader
             );
 
-            // Step 3: Load the class and invoke its method
+            // Step 3: Load the class dynamically
             Class<?> dynamicClass = dexClassLoader.loadClass(className);
-            Object instance = dynamicClass.newInstance();
-            EditText textInputEditText = (EditText)findViewById(R.id.getInput);
-            String val = textInputEditText.getText().toString();
+            Object instance = dynamicClass.getDeclaredConstructor().newInstance(); // ✅ Ensure constructor exists
+
+            // Step 4: Get input from EditText safely
+            EditText textInputEditText = findViewById(R.id.getInput);
+            if (textInputEditText == null) {
+                return "Error: EditText not found";
+            }
+
+            String inputValue = textInputEditText.getText().toString();
+
+            // Step 5: Call the "Greet" method with input
             return (String) dynamicClass
                     .getMethod("Greet", String.class)
-                    .invoke(instance, val);
+                    .invoke(instance, inputValue);
+
         } catch (Exception e) {
             e.printStackTrace();
             return "Error: " + e.getMessage();
         }
     }
-    
+
+
 
     private String loadDynamicClassFromAssets(Context context, String dexFileName, String className) {
         try {

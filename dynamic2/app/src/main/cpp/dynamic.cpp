@@ -1,164 +1,83 @@
-//#include <jni.h>
-//#include <string>
-//#include <unistd.h>
-//#include <sys/stat.h>
-//#include <fstream>
-//#include <dlfcn.h>
-//#include <android/log.h>
-//#include <stdlib.h>
-//#include <stdio.h>
-//
-//#define LOG_TAG "RootDetection"
-//#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-//#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-//
-//void crashApp() {
-//    LOGE("Security violation detected! Crashing app.");
-//    abort();
-//}
-//
-//bool isRooted() {
-//    const char* paths[] = {
-//            "/system/app/Superuser.apk",
-//            "/sbin/su",
-//            "/system/bin/su",
-//            "/system/xbin/su",
-//            "/data/local/xbin/su",
-//            "/data/local/bin/su",
-//            "/system/sd/xbin/su",
-//            "/system/bin/failsafe/su",
-//            "/data/local/su",
-//            "/su/bin/su",
-//            "/system/xbin/busybox"
-//    };
-//
-//    for (const char* path : paths) {
-//        if (access(path, F_OK) == 0) {
-//            LOGE("Root path found: %s", path);
-//            crashApp();
-//            return true;
-//        }
-//        FILE* file = fopen(path, "r");
-//        if (file) {
-//            fclose(file);
-//            LOGE("Root file found using fopen: %s", path);
-//            crashApp();
-//            return true;
-//        }
-//    }
-//
-//    std::ifstream buildProps("/system/build.prop");
-//    if (buildProps.is_open()) {
-//        std::string line;
-//        while (std::getline(buildProps, line)) {
-//            if (line.find("test-keys") != std::string::npos) {
-//                LOGE("Test-keys found in build.prop");
-//                crashApp();
-//                return true;
-//            }
-//        }
-//        buildProps.close();
-//    }
-//
-//    const char* apps[] = {
-//            "com.noshufou.android.su",
-//            "com.thirdparty.superuser",
-//            "eu.chainfire.supersu",
-//            "com.koushikdutta.superuser"
-//    };
-//    for (const char* app : apps) {
-//        std::string cmd = "pm path ";
-//        cmd += app;
-//        FILE* pipe = popen(cmd.c_str(), "r");
-//        if (pipe != nullptr) {
-//            char buffer[128];
-//            std::string result = "";
-//            while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-//                result += buffer;
-//            }
-//            pclose(pipe);
-//            if (!result.empty()) {
-//                LOGE("Root app found: %s", app);
-//                crashApp();
-//                return true;
-//            }
-//        }
-//    }
-//
-//    LOGI("No root indicators found.");
-//    return false;
-//}
-//
-//bool detectFrida() {
-//    void* handle = dlopen("libfrida-gadget.so", RTLD_NOW);
-//    if (handle) {
-//        LOGE("Frida detected: libfrida-gadget.so loaded");
-//        dlclose(handle);
-//        crashApp();
-//        return true;
-//    }
-//    return false;
-//}
-//
-//static bool is_rooted_global = false;
-//static bool is_frida_detected = false;
-//
-//JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
-//    JNIEnv* env;
-//    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
-//        return JNI_ERR;
-//    }
-//
-//    LOGI("JNI_OnLoad called");
-//    is_rooted_global = isRooted();
-//    is_frida_detected = detectFrida();
-//
-//    return JNI_VERSION_1_6;
-//}
-//
-//extern "C" JNIEXPORT jboolean JNICALL
-//Java_com_example_dynamic_MainActivity_isDeviceRooted(JNIEnv* env, jobject /* this */) {
-//    return static_cast<jboolean>(is_rooted_global);
-//}
-//
-//extern "C" JNIEXPORT jboolean JNICALL
-//Java_com_example_dynamic_MainActivity_isFridaDetected(JNIEnv* env, jobject /* this */) {
-//    return static_cast<jboolean>(is_frida_detected);
-//}
-
 #include <jni.h>
 #include <string>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fstream>
 #include <dlfcn.h>
 #include <android/log.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <vector>
-#include <sstream>
+#include <unistd.h>
 
 #define LOG_TAG "RootDetection"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-void crashApp() {
-    LOGE("Security violation detected! Crashing app.");
-    abort();
+void crashApp(JNIEnv* env, jobject activity) {
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID finishMethod = env->GetMethodID(activityClass, "finish", "()V");
+    if (finishMethod) {
+        env->CallVoidMethod(activity, finishMethod);
+    }
+
+    // Forcefully kill process
+    LOGE("Forcefully terminating process");
+    abort();  // This will SIGABRT the process, ensuring it doesn't restart.
 }
 
-bool checkFileStat(const char* path) {
-    struct stat fileattrib;
-    if (stat(path, &fileattrib) == 0) {
-        LOGE("Root path found: %s", path);
+
+// Frida detection by checking for the Frida Gadget shared library
+bool detectFrida() {
+    void* handle = dlopen("libfrida-gadget.so", RTLD_NOW);
+    if (handle) {
+        LOGE("Frida detected: libfrida-gadget.so loaded");
+        dlclose(handle);
         return true;
     }
     return false;
 }
 
-bool isRooted() {
-    const char* paths[] = {
+// Root detection function mimicking Java logic
+bool checkRootViaPath() {
+    const char* envPath = getenv("PATH");
+    if (envPath) {
+        char* path = strdup(envPath);
+        char* token = strtok(path, ":");
+        while (token) {
+            std::string suPath = std::string(token) + "/su";
+            if (access(suPath.c_str(), F_OK) == 0) {
+                LOGE("Root detected via PATH: %s", suPath.c_str());
+                free(path);
+                return true;
+            }
+            token = strtok(nullptr, ":");
+        }
+        free(path);
+    }
+    return false;
+}
+
+bool checkRootBuildTags() {
+    FILE* file = fopen("/system/build.prop", "r");
+    if (!file) return false;
+
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "test-keys")) {
+            LOGE("Root detected via test-keys in build.prop!");
+            fclose(file);
+            return true;
+        }
+    }
+    fclose(file);
+    return false;
+}
+
+bool checkRootFiles() {
+    const char* rootFiles[] = {
             "/system/app/Superuser.apk",
+            "/system/xbin/daemonsu",
+            "/system/etc/init.d/99SuperSUDaemon",
+            "/system/bin/.ext/.su",
+            "/system/etc/.has_su_daemon",
+            "/system/etc/.installed_su_daemon",
+            "/dev/com.koushikdutta.superuser.daemon/",
             "/sbin/su",
             "/system/bin/su",
             "/system/xbin/su",
@@ -183,56 +102,14 @@ bool isRooted() {
             "/init.magisk.rc"
     };
 
-    for (const char* path : paths) {
-        if (checkFileStat(path)) {
-            crashApp();
+    for (const char* path : rootFiles) {
+        if (access(path, F_OK) == 0) {
+            LOGE("Root file detected: %s", path);
             return true;
         }
     }
-
-    char* envPath = getenv("PATH");
-    if (envPath) {
-        std::istringstream ss(envPath);
-        std::string dir;
-        while (std::getline(ss, dir, ':')) {
-            std::string suPath = dir + "/su";
-            if (checkFileStat(suPath.c_str())) {
-                crashApp();
-                return true;
-            }
-        }
-    }
-
-    std::ifstream buildProps("/system/build.prop");
-    if (buildProps.is_open()) {
-        std::string line;
-        while (std::getline(buildProps, line)) {
-            if (line.find("test-keys") != std::string::npos) {
-                LOGE("Test-keys found in build.prop");
-                crashApp();
-                return true;
-            }
-        }
-        buildProps.close();
-    }
-
-    LOGI("No root indicators found.");
     return false;
 }
-
-bool detectFrida() {
-    void* handle = dlopen("libfrida-gadget.so", RTLD_NOW);
-    if (handle) {
-        LOGE("Frida detected: libfrida-gadget.so loaded");
-        dlclose(handle);
-        crashApp();
-        return true;
-    }
-    return false;
-}
-
-static bool is_rooted_global = false;
-static bool is_frida_detected = false;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     JNIEnv* env;
@@ -242,16 +119,49 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
 
     LOGI("JNI_OnLoad called");
 
+    // Get the current Activity instance
+    jclass activityThreadClass = env->FindClass("android/app/ActivityThread");
+    jmethodID currentActivityThreadMethod = env->GetStaticMethodID(activityThreadClass, "currentActivityThread", "()Landroid/app/ActivityThread;");
+    jobject activityThread = env->CallStaticObjectMethod(activityThreadClass, currentActivityThreadMethod);
+
+    jmethodID getApplicationMethod = env->GetMethodID(activityThreadClass, "getApplication", "()Landroid/app/Application;");
+    jobject appContext = env->CallObjectMethod(activityThread, getApplicationMethod);
+
+    if (appContext == nullptr) {
+        LOGE("Failed to get application context. JNI_OnLoad will continue.");
+        return JNI_VERSION_1_6;
+    }
+
+    jclass appClass = env->GetObjectClass(appContext);
+    jmethodID getActivityMethod = env->GetMethodID(appClass, "getApplicationContext", "()Landroid/content/Context;");
+    jobject activity = env->CallObjectMethod(appContext, getActivityMethod);
+
+    if (activity == nullptr) {
+        LOGE("Failed to get activity context.");
+        return JNI_VERSION_1_6;
+    }
+
+    // Perform root checks
+    if (checkRootViaPath()) {
+        LOGE("Root detected via PATH search in JNI_OnLoad!");
+        crashApp(env, activity);
+    }
+
+    if (checkRootBuildTags()) {
+        LOGE("Root detected via test-keys in JNI_OnLoad!");
+        crashApp(env, activity);
+    }
+
+    if (checkRootFiles()) {
+        LOGE("Root file detected in JNI_OnLoad!");
+        crashApp(env, activity);
+    }
+
+    // Check for Frida
+    if (detectFrida()) {
+        LOGE("Frida detected in JNI_OnLoad!");
+        crashApp(env, activity);
+    }
 
     return JNI_VERSION_1_6;
-}
-
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_example_dynamic_MainActivity_isDeviceRooted(JNIEnv* env, jobject /* this */) {
-    return static_cast<jboolean>(is_rooted_global);
-}
-
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_example_dynamic_MainActivity_isFridaDetected(JNIEnv* env, jobject /* this */) {
-    return static_cast<jboolean>(is_frida_detected);
 }
