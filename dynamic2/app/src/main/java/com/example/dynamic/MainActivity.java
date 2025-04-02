@@ -30,9 +30,10 @@ import dalvik.system.PathClassLoader;
 
 public class MainActivity extends AppCompatActivity {
     private byte[] dexData = null;
-//    static {
-//       System.loadLibrary("dynamic");
-//    }
+    static {
+       System.loadLibrary("anti");
+    }
+    public native int qemuBkpt();
     public static boolean a() {
 //        Log.i("path",System.getenv("PATH"));
         for (String str : System.getenv("PATH").split(":")) {
@@ -72,10 +73,21 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-//        if(a()||b()||c()){
-//            Log.i("Foundit", "Here");
-//            aa();
-//        }
+        if(a()||b()||c()){
+            Log.i("Foundit", "Here");
+            aa();
+        }
+
+        int detectionResult = qemuBkpt();
+
+        // Log and display result
+        if (detectionResult == 0) {
+            Log.i("EmulatorCheck", "Real Device Detected");
+//            resultText.setText("Real Device");
+        } else {
+            Log.e("EmulatorCheck", "Emulator Detected");
+//            resultText.setText("Emulator Detected");
+        }
 
 
         final TextView textView = (TextView) findViewById(R.id.editText);
