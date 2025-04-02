@@ -823,6 +823,99 @@ Luckily the condition to have the flag looks straight-forward. Based on the code
 
 It is clear that our `xss` worked. It can also be checked that in the flags screen, lvl 14 has become green. 
 
+### Part 2: Flutter Auth Bypass
+
+This challenge is not intended to have a flag or used to trigger a flag. It is used to show an incorrect usage of routing, which may be used to gain access without a password.
+
+The codes of `login-xss.dart` and `auth-bypass.dart` are almost same but have differences.
+
+```dart
+// login-xss.dart
+              TextFormField(
+                decoration: InputDecoration(
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.greenAccent, width: 5.0),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: PrimaryColor, width: 5.0),
+                    ),
+                    //border: InputBorder.none,
+                    hintText: 'Enter a username.', contentPadding: const EdgeInsets.all(20.0)
+                ),
+                key: usernameKey,
+                validator: (username) {
+                  if (username.isEmpty) {
+                    return 'Please enter a username.';
+                  }
+                  storeFlagState() async {
+                    SharedPreferences prefs = await SharedPreferences.getInstance();
+                    prefs.setString('username', username);
+                  }
+                  storeFlagState();
+                  return null;
+                },
+              ),
+```
+
+We can see that in `login-xss.dart`, the `username` gets stored while the `password` doesn't get stored. But at the end a `validation` occurs which mandates the user to enter `username` and `password`(It cannot be empty). 
+
+```dart
+// login-xss.dart
+padding: EdgeInsets.only(
+                    left: 25.0, right: 25.0, top: 2.0),
+                child: RaisedButton(
+                  onPressed: () {
+                    // Validate returns true if the form is valid, or false
+                    // otherwise.
+                    if (_formKey.currentState.validate()) {
+                      // If the form is valid, display a Snackbar.
+                      Scaffold.of(context)
+                          .showSnackBar(SnackBar(content: Text('Processing Data')));
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MyHomePage(test: usernameKey.currentState.value,),
+                          ));
+                    }
+                  },
+                  child: Text('Sign up'),
+                ),
+```
+
+Now lets check the `auth-bypass.dart` file.
+
+```dart
+TextFormField(
+                decoration: InputDecoration(
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.greenAccent, width: 5.0),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: PrimaryColor, width: 5.0),
+                    ),
+                    //border: InputBorder.none,
+                    hintText: 'Enter a username.', contentPadding: const EdgeInsets.all(20.0)
+                ),
+                key: usernameKey,
+                validator: (username) {
+                  if (username.isEmpty) {
+                    return 'Please enter a username.';
+                  }
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MyHomePage(test: usernameKey.currentState.value,),
+                      ));
+                  return null;
+                },
+              ),
+```
+
+`Navigator.push` is used to route the app. In the above code, we see that the routing is happening inside the validator. It won't even care about the `password`. Only username is enough. This is a vulnerable configuration and in real-scenarios, one might get access without the password. 
+
+Try it out by just entering a `username`, and pressing on `sign up`.
+
+### Part 3: Flutter SSL Bypass
 ## Challenge 15
 
 This challenge clearly tells us that we have to deal with assembly. Classic Reverse engineering. On opening this challenge level, we see an array of bytes. `[58, 42, 40]`. What does it do? Lets check the `AssemblyActivity` code on `jadx`. 
