@@ -916,6 +916,9 @@ TextFormField(
 Try it out by just entering a `username`, and pressing on `sign up`.
 
 ### Part 3: Flutter SSL Bypass
+
+This challenge and `challenge 17` are linked. I will write the entire solution under [[#Challenge 17]].
+
 ## Challenge 15
 
 This challenge clearly tells us that we have to deal with assembly. Classic Reverse engineering. On opening this challenge level, we see an array of bytes. `[58, 42, 40]`. What does it do? Lets check the `AssemblyActivity` code on `jadx`. 
@@ -1269,4 +1272,234 @@ g.a result=false
  And thus we have out flag. This highlights the capability of `Frida` as well.
 
 Flag :- `[Nice_Work]`
+
+## Challenge 17
+
+This entire challenge is about SSL pinning and bypassing it. While in this challenge, it's not exactly bypassing the pre-set certificates, this challenge did help me to understand the concept of SSL pinning. So what is SSL pinning?
+
+**SSL Pinning (or Certificate Pinning)** is a security technique used in mobile apps (and sometimes web apps) to **prevent man-in-the-middle (MITM) attacks** by ensuring the app only trusts a specific SSL certificate or public key when communicating with a server.
+
+I won't go into much details about it. Some helpful links below:-
+- https://developer.android.com/privacy-and-security/security-config#CertificatePinning
+- https://www.youtube.com/watch?v=efIPpIYBNTc
+
+Let me give an overview of how to do the entire challenge but as the previous one, the website of the author, i.e.:- `https://b3nac.com` is down, and thus the flag can't be got the normal way.
+
+**Short overview of the SSL pin bypass process**
+
+The apk is using a third-party open-source flutter plugin to check if the fingerprint/certificate of the url we provide, matches the actual certificate on the website. If it matches(can be bypassed via frida), it puts a `get` request to the url `http://b3nac.com/Epic_Awesomeness`, whose response when intercepted, we are supposed to get the flag.
+
+Now lets get into the detailed process
+
+At first we check the `FlagSeventeenActivity.class` in Jadx but it doesn't have anything interesting except the hints, which ask us to `find the SSL pinning form`. It basically asks us to go the the 3rd part of `flutter xss` challenges.
+
+![ssl_pin_form](./Images/ssl_pin_form.png)
+
+Next we check the `dart source code`, as it was supposed to be given based on the video published by the author himself. So yea.
+
+```dart
+// plugin_ssl_bypass.dart
+void submit() {
+    // First validate form.
+    if (_formKey.currentState.validate()) {
+      _formKey.currentState.save(); // Save our form now.
+
+      this.check(_data.serverURL, _data.allowedSHAFingerprint, _data.sha, _data.headerHttp, _data.timeout);
+
+      }
+    }
+```
+
+On pressing the `check` button, the `submit` function gets executed. It has the values that we entered and then it is getting passed to the `check` function.
+
+```dart
+  check(String url, String fingerprint, SHA sha, Map<String, String> headerHttp, int timeout) async {
+
+    List<String> allowedShA1FingerprintList = new List();
+    allowedShA1FingerprintList.add(fingerprint);
+
+    try {
+      // Platform messages may fail, so we use a try/catch PlatformException.
+      String checkMsg = await SslPinningPlugin.check(serverURL: url,
+          headerHttp: headerHttp,
+          sha: sha,
+          allowedSHAFingerprints: allowedShA1FingerprintList,
+          timeout: timeout);
+      
+      if (!mounted)
+        return;
+
+      Scaffold.of(scaffoldContext).showSnackBar(
+        new SnackBar(
+          content: new Text(checkMsg),
+          duration: Duration(seconds: 1),
+          backgroundColor: Colors.green,
+        ),
+
+      );
+      _makeGetRequest();
+    }catch (e){
+      Scaffold.of(scaffoldContext).showSnackBar(
+        new SnackBar(
+          content: new Text(e.toString()),
+          duration: Duration(seconds: 1),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+```
+
+It can be clearly seen that the check function, is calling the `SslPinningPlugin.check` function which is from the external package and is a wrapper around a whole code.
+
+The plugin is open-source and is here :- https://github.com/macif-dev/ssl_pinning_plugin
+
+```dart
+// ssl_pinning_plugin.dart
+import 'dart:async';
+
+import 'package:flutter/services.dart';
+
+// Values of SHA (SHA1 or SHA256)
+enum SHA { SHA1, SHA256 }
+// Values of verb HTTP supported (GET, HEAD)
+enum HttpMethod { Get, Head }
+
+class SslPinningPlugin {
+  static const MethodChannel _channel =
+      const MethodChannel('ssl_pinning_plugin');
+
+  //  Compare Fingerprint on [serverURL] and [allowedSHAFingerprints]
+  static Future<String> check(
+      {required String serverURL,
+      HttpMethod httpMethod = HttpMethod.Get,
+      Map<String, String>? headerHttp,
+      required SHA sha,
+      required List<String> allowedSHAFingerprints,
+      required int timeout}) async {
+    final Map<String, dynamic> params = <String, dynamic>{
+      "url": serverURL,
+      "httpMethod": httpMethod.toString().split(".").last,
+      "headers": headerHttp ?? new Map(),
+      "type": sha.toString().split(".").last,
+      "fingerprints": allowedSHAFingerprints,
+      "timeout": timeout
+    };
+
+    String resp = await _channel.invokeMethod('check', params);
+    return resp;
+  }
+}
+```
+
+Notice that `static const MethodChannel _channel = const MethodChannel('ssl_pinning_plugin');`
+
+`Method channel` in `flutter` is a mechanism that enables communication between Flutter (Dart) and the native Android or iOS code, allowing Flutter to invoke native methods and receive results back . The actual implementation of the plugin for android is in `kotlin`. Now where to find that code in our apk? 
+
+For sure it will be not in the `libapp.so` as the main implementation is in `kotlin`. So it has to be somewhere in `jadx`.
+
+`Note :- I spent majority of my time finding this implementation, because I thought not a single word from the plugin will be there in the apk. I was badly wrong. I did all sorts of things, checking all the shared-object codes, finding the method channel, and observing what was getting passed through it, and then was I able to find the implementation but lets make it simpler. I will put all the frida scripts I tried below but commented out(https://github.com/Joy2225/Android_Rev/tree/main/Injured_android/lvl_17.js). You can play around with it.`
+
+Search `ssl_pinning_plugin`, i.e.:- the plugin name in jadx, and we can find the plugin implementation code.
+
+![plugin_code](./Images/plugin_code.png)
+
+Going to that particular class and looking around, we find the code which is sending if the certificate matched or not.
+
+```java
+public final boolean a(String str, List<String> list, Map<String, String> map, int i, String str2) {
+        int g;
+        g.e(str, "serverURL");
+        g.e(list, "allowedFingerprints");
+        g.e(map, "httpHeaderArgs");
+        g.e(str2, "type");
+        String d2 = d(str, i, map, str2);
+        g = j.g(list, 10);
+        ArrayList arrayList = new ArrayList(g);
+        for (String str3 : list) {
+            if (str3 == null) {
+                throw new NullPointerException("null cannot be cast to non-null type java.lang.String");
+            }
+            String upperCase = str3.toUpperCase();
+            g.d(upperCase, "(this as java.lang.String).toUpperCase()");
+            arrayList.add(new e("\\s").a(upperCase, ""));
+        }
+        return arrayList.contains(d2);
+    }
+```
+
+From here on, its just a simple frida script to return true all the time.
+
+```js
+Java.perform(() => {
+    let cls = Java.use("b.d.a.a.a");
+    cls.a.overload(
+      'java.lang.String',
+      'java.util.List',
+      'java.util.Map',
+      'int',
+      'java.lang.String'
+    ).implementation = function (url, list, map, timeout, type) {
+      console.log("[Bypass] Called with URL:", url);
+      return true; 
+    };
+  });
+```
+
+Other things I played around with :- 
+
+```js
+Java.perform(() => {
+    function dumpByteBufferSafe(bb) {
+        try {
+            const limit = bb.limit();
+            const pos = bb.position();
+            let hexDump = '';
+
+            for (let i = pos; i < limit; i++) {
+                const byte = bb.get(i);
+                hexDump += ('0' + (byte & 0xff).toString(16)).slice(-2) + ' ';
+            }
+
+            return hexDump.trim();
+        } catch (err) {
+            return '[Error dumping ByteBuffer: ' + err + ']';
+        }
+    }
+
+    let b = Java.use("c.a.c.a.i$b");
+    b["a"].implementation = function (byteBuffer) {
+        console.log(`b.a is called: byteBuffer=${byteBuffer}`);
+        console.log(`[b.a] ByteBuffer Dump: ${dumpByteBufferSafe(byteBuffer)}`);
+        return this["a"](byteBuffer);
+    };
+
+    let a = Java.use("c.a.c.a.i$a");
+    a["a"].implementation = function (byteBuffer, interfaceC0071b) {
+        console.log(`a.a is called: byteBuffer=${byteBuffer}, interfaceC0071b=${interfaceC0071b}`);
+        console.log(`[a.a] ByteBuffer Dump: ${dumpByteBufferSafe(byteBuffer)}`);
+        return this["a"](byteBuffer, interfaceC0071b);
+    };
+
+    let d = Java.use("b.d.a.a.a");
+    d["a"].implementation = function (str, list, map, i, str2) {
+    console.log(`a.a is called: str=${str}, list=${list}, map=${map}, i=${i}, str2=${str2}`);
+    console.log(list.get(0));
+    let result = this["a"](str, list, map, i, str2);
+    return result;
+};
+});  
+```
+
+Run the script with the command :- `frida -U -f b3nac.injuredandroid -l .\lvl_17.js`
+
+Then just put any random url and random fingerprint the text-boxes and click `check`.
+
+![level_17_frida_poc](./Images/lvl_17_frida_poc.png)
+
+Now, I would have loved to get the flag the intended way, but it won't work due to the reasons specified in the previous challenge as well. So I will do it the unintended way. I will use the same script from the previous challenge to get the flag.
+
+![flag_17](./Images/flag_17.png)
+
+Flag :- `Epic_Awesomeness`
 
