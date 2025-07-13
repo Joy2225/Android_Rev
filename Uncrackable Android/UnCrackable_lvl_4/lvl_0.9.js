@@ -10,22 +10,34 @@ Java.perform(function(){
     //   });
 
 
-
-    let c = Java.use("b.a.a.b");
-
-    c["j"].implementation = function () {
-        console.log("disable root");
+    let root = Java.use("♫.ᵤ");
+    root["₤"].implementation = function () {
+        console.log("Client side root checker called");
         return false;
     };
 
-    c["e"].implementation = function () {
+    root["θ"].overload().implementation = function () {
+        console.log("rootbear root checker called");
         return false;
-    };
-
-    // c["ö"].implementation = function () {
-    //     return false;
-    // };
-
+    }
+    console.log(Module.getBaseAddress("libnative-lib.so"))
 
     
 });
+
+Process.enumerateThreads().forEach(function(thread) {
+    console.log("Thread ID: " + thread.id + ", Name: " + thread.name);
+    Stalker.follow(thread.id, {
+        events: {
+            call: true,
+            ret: true,
+            exec: true
+        },
+        onReceive: function(events) {
+            console.log("Received events: ", events);
+        },
+        onCallSummary: function(summary) {
+            console.log("Call summary: ", summary);
+        }
+    });
+    });
