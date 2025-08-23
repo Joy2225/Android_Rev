@@ -10,13 +10,14 @@ dudetheftauto.apk
 ch0pin UnCrackable
 *.iml
 .gradle
+"dynamic_load/.gradle/config.properties"
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+*/.idea/caches
+*/.idea/libraries
+*/.idea/modules.xml
+*/.idea/workspace.xml
+*/.idea/navEditor.xml
+*/.idea/assetWizardSettings.xml
 .DS_Store
 /build
 /captures
@@ -25,7 +26,8 @@ ch0pin UnCrackable
 local.properties
 subway surfer
 Unity_Game_Hacking_il2cpp
-Flutter Rev
+"Flutter Rev/"
 InjuredAndroid-1.0.12-release
 InjuredAndroid/
 adv_frida/
+FactsDroid*
