@@ -31,3 +31,8 @@ InjuredAndroid-1.0.12-release
 InjuredAndroid/
 adv_frida/
 FactsDroid*
+ARM32_fridaflutterproxy/*v7a/
+ARM32_fridaflutterproxy/**/*.apk
+RASP_Bypass/Promon/**/
+RASP_Bypass/Promon/**/*.apk
+RASP_Bypass/Promon/**/*.apks
